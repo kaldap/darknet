@@ -540,6 +540,7 @@ typedef struct load_args{
     int scale;
     int center;
     int coords;
+	int gray;
     float jitter;
     float angle;
     float aspect;

@@ -1,6 +1,7 @@
 #include "darknet.h"
+#include "utils.h"
 
-#include <sys/time.h>
+#include <time.h>
 #include <assert.h>
 
 void extend_data_truth(data *d, int n, float val)
@@ -62,7 +63,7 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
     printf("%d\n", ngpus);
     network **nets = calloc(ngpus, sizeof(network*));
 
-    srand(time(0));
+    srand((unsigned int)time(0));
     int seed = rand();
     for(i = 0; i < ngpus; ++i){
         srand(seed);
@@ -72,7 +73,7 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
         nets[i] = load_network(cfgfile, weightfile, clear);
         nets[i]->learning_rate *= ngpus;
     }
-    srand(time(0));
+    srand((unsigned int)time(0));
     network *net = nets[0];
 
     int imgs = net->batch * net->subdivisions * ngpus;
@@ -102,8 +103,8 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
     args.threads = 32;
     args.hierarchy = net->hierarchy;
 
-    args.min = net->min_ratio*args.w;
-    args.max = net->max_ratio*args.w;
+    args.min = (int)(net->min_ratio*args.w);
+    args.max = (int)(net->max_ratio*args.w);
     args.angle = net->angle;
     args.aspect = net->aspect;
     args.exposure = net->exposure;
@@ -123,7 +124,7 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
     args.d = &buffer;
     load_thread = load_data(args);
 
-    int epoch = (*net->seen)/N;
+    int epoch = (int)((*net->seen)/N);
     while(get_current_batch(net) < net->max_batches || net->max_batches == 0){
         time = what_time_is_it_now();
 
@@ -157,7 +158,7 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
             int index = max_index(resized.y.vals[z] + train.y.cols, divs*divs);
             inds[z] = index;
             for(i = 0; i < divs*divs; ++i){
-                resized.y.vals[z][train.y.cols + i] = (i == index)? 1 : 0;
+                resized.y.vals[z][train.y.cols + i] = (i == index)? 1.0f : 0.0f;
             }
         }
         data best = select_data(tiles, inds);
@@ -176,7 +177,7 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
         }
         free_data(best);
         printf("\n");
-        image im = float_to_image(64,64,3,resized.X.vals[0]);
+        //image im = float_to_image(64,64,3,resized.X.vals[0]);
         //show_image(im, "orig");
         //cvWaitKey(100);
         /*
@@ -202,12 +203,12 @@ void train_attention(char *datacfg, char *cfgfile, char *weightfile, int *gpus, 
         free_data(train);
         if(avg_cls_loss == -1) avg_cls_loss = closs;
         if(avg_att_loss == -1) avg_att_loss = aloss;
-        avg_cls_loss = avg_cls_loss*.9 + closs*.1;
-        avg_att_loss = avg_att_loss*.9 + aloss*.1;
+        avg_cls_loss = avg_cls_loss*.9f + closs*.1f;
+        avg_att_loss = avg_att_loss*.9f + aloss*.1f;
 
-        printf("%ld, %.3f: Att: %f, %f avg, Class: %f, %f avg, %f rate, %lf seconds, %ld images\n", get_current_batch(net), (float)(*net->seen)/N, aloss, avg_att_loss, closs, avg_cls_loss, get_current_rate(net), what_time_is_it_now()-time, *net->seen);
+        printf("%ld, %.3f: Att: %f, %f avg, Class: %f, %f avg, %f rate, %lf seconds, %ld images\n", (long)get_current_batch(net), (float)(*net->seen)/N, aloss, avg_att_loss, closs, avg_cls_loss, get_current_rate(net), what_time_is_it_now()-time, (long)*net->seen);
         if(*net->seen/N > epoch){
-            epoch = *net->seen/N;
+            epoch = (int)(*net->seen/N);
             char buff[256];
             sprintf(buff, "%s/%s_%d.weights",backup_directory,base, epoch);
             save_weights(net, buff);
@@ -235,7 +236,7 @@ void validate_attention_single(char *datacfg, char *filename, char *weightfile)
     int i, j;
     network *net = load_network(filename, weightfile, 0);
     set_batch_network(net, 1);
-    srand(time(0));
+    srand((unsigned int)time(0));
 
     list *options = read_data_cfg(datacfg);
 
@@ -323,7 +324,7 @@ void validate_attention_multi(char *datacfg, char *filename, char *weightfile)
     int i, j;
     network *net = load_network(filename, weightfile, 0);
     set_batch_network(net, 1);
-    srand(time(0));
+    srand((unsigned int)time(0));
 
     list *options = read_data_cfg(datacfg);
 

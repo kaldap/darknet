@@ -1,4 +1,5 @@
 #include "darknet.h"
+#include "utils.h"
 
 #include <math.h>
 

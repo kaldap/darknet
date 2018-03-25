@@ -4,7 +4,7 @@ char *dice_labels[] = {"face1","face2","face3","face4","face5","face6"};
 
 void train_dice(char *cfgfile, char *weightfile)
 {
-    srand(time(0));
+    srand((unsigned int)time(0));
     float avg_loss = -1;
     char *base = basecfg(cfgfile);
     char *backup_directory = "/home/pjreddie/backup/";
@@ -28,16 +28,16 @@ void train_dice(char *cfgfile, char *weightfile)
         printf("Loaded: %lf seconds\n", sec(clock()-time));
 
         time=clock();
-        float loss = train_network(net, train);
+        float loss = train_network(&net, train);
         if(avg_loss == -1) avg_loss = loss;
-        avg_loss = avg_loss*.9 + loss*.1;
+        avg_loss = (float)(avg_loss*.9 + loss*.1);
         printf("%d: %f, %f avg, %lf seconds, %ld images\n", i, loss, avg_loss, sec(clock()-time), *net.seen);
         free_data(train);
-        if((i % 100) == 0) net.learning_rate *= .1;
+        if((i % 100) == 0) net.learning_rate *= .1f;
         if(i%100==0){
             char buff[256];
             sprintf(buff, "%s/%s_%d.weights",backup_directory,base, i);
-            save_weights(net, buff);
+            save_weights(&net, buff);
         }
     }
 }

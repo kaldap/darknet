@@ -183,7 +183,7 @@ void update_local_layer(local_layer l, update_args a)
 
 #ifdef GPU
 
-void forward_local_layer_gpu(const local_layer l, network net)
+void forward_local_layer_gpu(local_layer l, network net)
 {
     int out_h = local_out_height(l);
     int out_w = local_out_width(l);

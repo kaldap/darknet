@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -51,6 +52,25 @@ char **get_random_paths(char **paths, int n, int m)
     }
     pthread_mutex_unlock(&mutex);
     return random_paths;
+}
+
+volatile int _last_loaded_image = 0;
+char **get_sequential_paths(char **paths, int n, int m)
+{
+	char **selected_paths = calloc(n, sizeof(char*));
+	int i;
+
+	assert(m > 0);
+	pthread_mutex_lock(&mutex);
+	for (i = 0; i < n; ++i) {
+		selected_paths[i] = paths[_last_loaded_image++];
+		if (_last_loaded_image >= m) {
+			//fprintf(stderr, "\r\n\r\nAll images has been processed!\r\n\r\n");
+			_last_loaded_image = 0;
+		}
+	}
+	pthread_mutex_unlock(&mutex);
+	return selected_paths;
 }
 
 char **find_replace_paths(char **paths, int n, char *find, char *replace)
@@ -941,16 +961,16 @@ data load_data_swag(char **paths, int n, int classes, float jitter)
     return d;
 }
 
-data load_data_detection(int n, char **paths, int m, int w, int h, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
+data load_data_detection(int n, char **paths, int m, int w, int h, int gray, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
 {
-    char **random_paths = get_random_paths(paths, n, m);
+    char **random_paths = get_sequential_paths(paths, n, m);
     int i;
     data d = {0};
     d.shallow = 0;
 
     d.X.rows = n;
     d.X.vals = calloc(d.X.rows, sizeof(float*));
-    d.X.cols = h*w*3;
+    d.X.cols = h*w*(gray ? 1 : 3);
 
     d.y = make_matrix(n, 5*boxes);
     for(i = 0; i < n; ++i){
@@ -983,9 +1003,19 @@ data load_data_detection(int n, char **paths, int m, int w, int h, int boxes, in
 
         int flip = rand()%2;
         if(flip) flip_image(sized);
-        d.X.vals[i] = sized.data;
 
-
+		if (!gray) {
+			d.X.vals[i] = sized.data;
+		} else {
+			// Use this when already not grayscale...
+			/*image grayscale = grayscale_image(sized);
+			d.X.vals[i] = grayscale.data;
+			free_image(sized);*/
+			// ...or this when data are preprocessed (just uses R channel for a grayscale)
+			sized.c = 1;
+			d.X.vals[i] = sized.data;			
+		}
+		
         fill_truth_detection(random_paths[i], boxes, d.y.vals[i], classes, flip, -dx/w, -dy/h, nw/w, nh/h);
 
         free_image(orig);
@@ -1019,7 +1049,7 @@ void *load_thread(void *ptr)
     } else if (a.type == REGION_DATA){
         *a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
     } else if (a.type == DETECTION_DATA){
-        *a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+        *a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.gray, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
     } else if (a.type == SWAG_DATA){
         *a.d = load_data_swag(a.paths, a.n, a.classes, a.jitter);
     } else if (a.type == COMPARE_DATA){

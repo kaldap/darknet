@@ -1,14 +1,14 @@
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <assert.h>
-#include <unistd.h>
 #include <float.h>
 #include <limits.h>
 #include <time.h>
-
-#include "utils.h"
+#include <windows.h>
+#include "unistd.h"
 
 
 /*
@@ -23,18 +23,81 @@ double get_wall_time()
 }
 */
 
+#define CLOCK_REALTIME 0
+
+LARGE_INTEGER getFILETIMEoffset()
+{
+	SYSTEMTIME s;
+	FILETIME f;
+	LARGE_INTEGER t;
+
+	s.wYear = 1970;
+	s.wMonth = 1;
+	s.wDay = 1;
+	s.wHour = 0;
+	s.wMinute = 0;
+	s.wSecond = 0;
+	s.wMilliseconds = 0;
+	SystemTimeToFileTime(&s, &f);
+	t.QuadPart = f.dwHighDateTime;
+	t.QuadPart <<= 32;
+	t.QuadPart |= f.dwLowDateTime;
+	return (t);
+}
+
+int clock_gettime(int X, struct timeval *tv)
+{
+	LARGE_INTEGER           t;
+	FILETIME            f;
+	double                  microseconds;
+	static LARGE_INTEGER    offset;
+	static double           frequencyToMicroseconds;
+	static int              initialized = 0;
+	static BOOL             usePerformanceCounter = 0;
+
+	(void)X;
+
+	if (!initialized) {
+		LARGE_INTEGER performanceFrequency;
+		initialized = 1;
+		usePerformanceCounter = QueryPerformanceFrequency(&performanceFrequency);
+		if (usePerformanceCounter) {
+			QueryPerformanceCounter(&offset);
+			frequencyToMicroseconds = (double)performanceFrequency.QuadPart / 1000000.;
+		}
+		else {
+			offset = getFILETIMEoffset();
+			frequencyToMicroseconds = 10.;
+		}
+	}
+	if (usePerformanceCounter) QueryPerformanceCounter(&t);
+	else {
+		GetSystemTimeAsFileTime(&f);
+		t.QuadPart = f.dwHighDateTime;
+		t.QuadPart <<= 32;
+		t.QuadPart |= f.dwLowDateTime;
+	}
+
+	t.QuadPart -= offset.QuadPart;
+	microseconds = (double)t.QuadPart / frequencyToMicroseconds;
+	t.QuadPart = (LONGLONG)microseconds;
+	tv->tv_sec = (long)(t.QuadPart / 1000000);
+	tv->tv_usec = (long)(t.QuadPart % 1000000);
+	return (0);
+}
+
 double what_time_is_it_now()
 {
-    struct timespec now;
+    struct timeval now;
     clock_gettime(CLOCK_REALTIME, &now);
-    return now.tv_sec + now.tv_nsec*1e-9;
+    return now.tv_sec + now.tv_usec*1e-6;
 }
 
 int *read_intlist(char *gpu_list, int *ngpus, int d)
 {
     int *gpus = 0;
     if(gpu_list){
-        int len = strlen(gpu_list);
+        int len = (int)strlen(gpu_list);
         *ngpus = 1;
         int i;
         for(i = 0; i < len; ++i){
@@ -75,7 +138,7 @@ void sorta_shuffle(void *arr, size_t n, size_t size, size_t sections)
         size_t start = n*i/sections;
         size_t end = n*(i+1)/sections;
         size_t num = end-start;
-        shuffle(arr+(start*size), num, size);
+        shuffle((unsigned char*)arr+(start*size), num, size);
     }
 }
 
@@ -85,9 +148,9 @@ void shuffle(void *arr, size_t n, size_t size)
     void *swp = calloc(1, size);
     for(i = 0; i < n-1; ++i){
         size_t j = i + rand()/(RAND_MAX / (n-i)+1);
-        memcpy(swp,          arr+(j*size), size);
-        memcpy(arr+(j*size), arr+(i*size), size);
-        memcpy(arr+(i*size), swp,          size);
+        memcpy(swp, (unsigned char*)arr+(j*size), size);
+        memcpy((unsigned char*)arr+(j*size), (unsigned char*)arr+(i*size), size);
+        memcpy((unsigned char*)arr+(i*size), swp,          size);
     }
 }
 
@@ -148,7 +211,7 @@ float find_float_arg(int argc, char **argv, char *arg, float def)
     for(i = 0; i < argc-1; ++i){
         if(!argv[i]) continue;
         if(0==strcmp(argv[i], arg)){
-            def = atof(argv[i+1]);
+            def = (float)atof(argv[i+1]);
             del_arg(argc, argv, i);
             del_arg(argc, argv, i);
             break;
@@ -334,7 +397,7 @@ char *fgetl(FILE *fp)
     if(feof(fp)) return 0;
     size_t size = 512;
     char *line = malloc(size*sizeof(char));
-    if(!fgets(line, size, fp)){
+    if(!fgets(line, (int)size, fp)){
         free(line);
         return 0;
     }
@@ -352,7 +415,7 @@ char *fgetl(FILE *fp)
         }
         size_t readsize = size-curr;
         if(readsize > INT_MAX) readsize = INT_MAX-1;
-        fgets(&line[curr], readsize, fp);
+        fgets(&line[curr], (int)readsize, fp);
         curr = strlen(line);
     }
     if(line[curr-1] == '\n') line[curr-1] = '\0';
@@ -363,14 +426,14 @@ char *fgetl(FILE *fp)
 int read_int(int fd)
 {
     int n = 0;
-    int next = read(fd, &n, sizeof(int));
+    int next = _read(fd, &n, sizeof(int));
     if(next <= 0) return -1;
     return n;
 }
 
 void write_int(int fd, int n)
 {
-    int next = write(fd, &n, sizeof(int));
+    int next = _write(fd, &n, sizeof(int));
     if(next <= 0) error("read failed");
 }
 
@@ -378,7 +441,7 @@ int read_all_fail(int fd, char *buffer, size_t bytes)
 {
     size_t n = 0;
     while(n < bytes){
-        int next = read(fd, buffer + n, bytes-n);
+        int next = _read(fd, buffer + n, (unsigned int)(bytes-n));
         if(next <= 0) return 1;
         n += next;
     }
@@ -389,7 +452,7 @@ int write_all_fail(int fd, char *buffer, size_t bytes)
 {
     size_t n = 0;
     while(n < bytes){
-        size_t next = write(fd, buffer + n, bytes-n);
+        size_t next = _write(fd, buffer + n, (unsigned int)(bytes-n));
         if(next <= 0) return 1;
         n += next;
     }
@@ -400,7 +463,7 @@ void read_all(int fd, char *buffer, size_t bytes)
 {
     size_t n = 0;
     while(n < bytes){
-        int next = read(fd, buffer + n, bytes-n);
+        int next = _read(fd, buffer + n, (unsigned int)(bytes-n));
         if(next <= 0) error("read failed");
         n += next;
     }
@@ -410,7 +473,7 @@ void write_all(int fd, char *buffer, size_t bytes)
 {
     size_t n = 0;
     while(n < bytes){
-        size_t next = write(fd, buffer + n, bytes-n);
+        size_t next = _write(fd, buffer + n, (unsigned int)(bytes-n));
         if(next <= 0) error("write failed");
         n += next;
     }
@@ -463,9 +526,9 @@ float *parse_fields(char *line, int n)
         done = (*c == '\0');
         if(*c == ',' || done){
             *c = '\0';
-            field[count] = strtod(p, &end);
-            if(p == c) field[count] = nan("");
-            if(end != c && (end != c-1 || *end != '\r')) field[count] = nan(""); //DOS file formats!
+            field[count] = (float)strtod(p, &end);
+            if(p == c) field[count] = (float)nan("");
+            if(end != c && (end != c-1 || *end != '\r')) field[count] = (float)nan(""); //DOS file formats!
             p = c+1;
             ++count;
         }
@@ -536,8 +599,8 @@ float dist_array(float *a, float *b, int n, int sub)
 {
     int i;
     float sum = 0;
-    for(i = 0; i < n; i += sub) sum += pow(a[i]-b[i], 2);
-    return sqrt(sum);
+    for (i = 0; i < n; i += sub) sum += (float)pow(a[i]-b[i], 2);
+    return (float)sqrt(sum);
 }
 
 float mse_array(float *a, int n)
@@ -545,19 +608,19 @@ float mse_array(float *a, int n)
     int i;
     float sum = 0;
     for(i = 0; i < n; ++i) sum += a[i]*a[i];
-    return sqrt(sum/n);
+    return (float)sqrt(sum/n);
 }
 
 void normalize_array(float *a, int n)
 {
     int i;
     float mu = mean_array(a,n);
-    float sigma = sqrt(variance_array(a,n));
+    float sigma = (float)sqrt(variance_array(a,n));
     for(i = 0; i < n; ++i){
         a[i] = (a[i] - mu)/sigma;
     }
     mu = mean_array(a,n);
-    sigma = sqrt(variance_array(a,n));
+    sigma = (float)sqrt(variance_array(a,n));
 }
 
 void translate_array(float *a, int n, float s)
@@ -575,7 +638,7 @@ float mag_array(float *a, int n)
     for(i = 0; i < n; ++i){
         sum += a[i]*a[i];   
     }
-    return sqrt(sum);
+    return (float)sqrt(sum);
 }
 
 void scale_array(float *a, int n, float s)
@@ -589,7 +652,7 @@ void scale_array(float *a, int n, float s)
 int sample_array(float *a, int n)
 {
     float sum = sum_array(a, n);
-    scale_array(a, n, 1./sum);
+    scale_array(a, n, 1.f/sum);
     float r = rand_uniform(0, 1);
     int i;
     for(i = 0; i < n; ++i){
@@ -647,7 +710,7 @@ float rand_normal()
     if(haveSpare)
     {
         haveSpare = 0;
-        return sqrt(rand1) * sin(rand2);
+        return (float)(sqrt(rand1) * sin(rand2));
     }
 
     haveSpare = 1;
@@ -657,19 +720,8 @@ float rand_normal()
     rand1 = -2 * log(rand1);
     rand2 = (rand() / ((double) RAND_MAX)) * TWO_PI;
 
-    return sqrt(rand1) * cos(rand2);
+    return (float)(sqrt(rand1) * cos(rand2));
 }
-
-/*
-   float rand_normal()
-   {
-   int n = 12;
-   int i;
-   float sum= 0;
-   for(i = 0; i < n; ++i) sum += (float)rand()/RAND_MAX;
-   return sum-n/2.;
-   }
- */
 
 size_t rand_size_t()
 {
@@ -697,7 +749,7 @@ float rand_scale(float s)
 {
     float scale = rand_uniform(1, s);
     if(rand()%2) return scale;
-    return 1./scale;
+    return 1.f/scale;
 }
 
 float **one_hot_encode(float *a, int n, int k)
@@ -712,3 +764,13 @@ float **one_hot_encode(float *a, int n, int k)
     return t;
 }
 
+int my_rand(void)
+{
+	assert(RAND_MAX >= 0xff);
+	return 0x7FFFFFFF & (
+		((rand() & 0xff) << 0)  |
+		((rand() & 0xff) << 8)  |
+		((rand() & 0xff) << 16) |
+		((rand() & 0xff) << 24)
+		);
+}

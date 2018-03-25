@@ -567,7 +567,7 @@ void forward_region_layer_gpu(const layer l, network net)
     cuda_push_array(l.delta_gpu, l.delta, l.batch*l.outputs);
 }
 
-void backward_region_layer_gpu(const layer l, network net)
+void backward_region_layer_gpu(layer l, network net)
 {
     int b, n;
     for (b = 0; b < l.batch; ++b){

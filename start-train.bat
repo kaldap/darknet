@@ -1,0 +1,1 @@
+build\darknet\x64\darknet.exe detector train cfg/coco-bw.data cfg/tiny-yolo-wide.cfg partial.weights -gpus 0,1

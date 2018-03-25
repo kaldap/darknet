@@ -745,8 +745,8 @@ image float_to_image(int w, int h, int c, float *data)
 
 void place_image(image im, int w, int h, int dx, int dy, image canvas)
 {
-    int x, y, c;
-    for(c = 0; c < im.c; ++c){
+    int x, y, c, maxc = (im.c < canvas.c) ? im.c : canvas.c;
+    for(c = 0; c < maxc; ++c){
         for(y = 0; y < h; ++y){
             for(x = 0; x < w; ++x){
                 int rx = ((float)x / w) * im.w;

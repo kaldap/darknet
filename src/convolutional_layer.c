@@ -441,7 +441,7 @@ void backward_bias(float *bias_updates, float *delta, int batch, int n, int size
     }
 }
 
-void forward_convolutional_layer(convolutional_layer l, network net)
+void forward_convolutional_layer(const convolutional_layer l, network net)
 {
     int i, j;
 
