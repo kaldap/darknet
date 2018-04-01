@@ -79,36 +79,36 @@ void average(int argc, char *argv[])
     save_weights(sum, outfile);
 }
 
-long numops(network *net)
+long long numops(network *net)
 {
     int i;
-    long ops = 0;
+    long long ops = 0;
     for(i = 0; i < net->n; ++i){
         layer l = net->layers[i];
         if(l.type == CONVOLUTIONAL){
-            ops += 2l * l.n * l.size*l.size*l.c/l.groups * l.out_h*l.out_w;
+            ops += 2ll * l.n * l.size*l.size*l.c/l.groups * l.out_h*l.out_w;
         } else if(l.type == CONNECTED){
-            ops += 2l * l.inputs * l.outputs;
+            ops += 2ll * l.inputs * l.outputs;
         } else if (l.type == RNN){
-            ops += 2l * l.input_layer->inputs * l.input_layer->outputs;
-            ops += 2l * l.self_layer->inputs * l.self_layer->outputs;
-            ops += 2l * l.output_layer->inputs * l.output_layer->outputs;
+            ops += 2ll * l.input_layer->inputs * l.input_layer->outputs;
+            ops += 2ll * l.self_layer->inputs * l.self_layer->outputs;
+            ops += 2ll * l.output_layer->inputs * l.output_layer->outputs;
         } else if (l.type == GRU){
-            ops += 2l * l.uz->inputs * l.uz->outputs;
-            ops += 2l * l.uh->inputs * l.uh->outputs;
-            ops += 2l * l.ur->inputs * l.ur->outputs;
-            ops += 2l * l.wz->inputs * l.wz->outputs;
-            ops += 2l * l.wh->inputs * l.wh->outputs;
-            ops += 2l * l.wr->inputs * l.wr->outputs;
+            ops += 2ll * l.uz->inputs * l.uz->outputs;
+            ops += 2ll * l.uh->inputs * l.uh->outputs;
+            ops += 2ll * l.ur->inputs * l.ur->outputs;
+            ops += 2ll * l.wz->inputs * l.wz->outputs;
+            ops += 2ll * l.wh->inputs * l.wh->outputs;
+            ops += 2ll * l.wr->inputs * l.wr->outputs;
         } else if (l.type == LSTM){
-            ops += 2l * l.uf->inputs * l.uf->outputs;
-            ops += 2l * l.ui->inputs * l.ui->outputs;
-            ops += 2l * l.ug->inputs * l.ug->outputs;
-            ops += 2l * l.uo->inputs * l.uo->outputs;
-            ops += 2l * l.wf->inputs * l.wf->outputs;
-            ops += 2l * l.wi->inputs * l.wi->outputs;
-            ops += 2l * l.wg->inputs * l.wg->outputs;
-            ops += 2l * l.wo->inputs * l.wo->outputs;
+            ops += 2ll * l.uf->inputs * l.uf->outputs;
+            ops += 2ll * l.ui->inputs * l.ui->outputs;
+            ops += 2ll * l.ug->inputs * l.ug->outputs;
+            ops += 2ll * l.uo->inputs * l.uo->outputs;
+            ops += 2ll * l.wf->inputs * l.wf->outputs;
+            ops += 2ll * l.wi->inputs * l.wi->outputs;
+            ops += 2ll * l.wg->inputs * l.wg->outputs;
+            ops += 2ll * l.wo->inputs * l.wo->outputs;
         }
     }
     return ops;
@@ -138,9 +138,9 @@ void operations(char *cfgfile)
 {
     gpu_index = -1;
     network *net = parse_network_cfg(cfgfile);
-    long ops = numops(net);
-    printf("Floating Point Operations: %ld\n", ops);
-    printf("Floating Point Operations: %.2f Bn\n", (float)ops/1000000000.);
+    long long ops = numops(net);
+    printf("Floating Point Operations: %lld\n", ops);
+    printf("Floating Point Operations: %.2f Bn\n", ops/1000000000.);
 }
 
 void oneoff(char *cfgfile, char *weightfile, char *outfile)

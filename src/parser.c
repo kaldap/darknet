@@ -558,6 +558,8 @@ void parse_net_options(list *options, network *net)
     net->batch *= net->time_steps;
     net->subdivisions = subdivs;
     net->random = option_find_int_quiet(options, "random", 0);
+	net->samples_per_epoch = option_find_int_quiet(options, "samples_per_epoch", 0);
+	net->epoch_length = option_find_int_quiet(options, "epoch_length", 0);
 
     net->adam = option_find_int_quiet(options, "adam", 0);
     if(net->adam){

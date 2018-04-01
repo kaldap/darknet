@@ -1,0 +1,7 @@
+classes=16
+train=D:\!Datasets\COCO-filtered\train2014.txt
+valid=D:\!Datasets\COCO-filtered\val2014.txt
+names=D:\!Datasets\COCO-filtered\classes.txt
+backup=D:\!Datasets\COCO-filtered\backup
+eval=coco
+

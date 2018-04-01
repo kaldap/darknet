@@ -459,6 +459,8 @@ typedef struct network{
     float saturation;
     float hue;
     int random;
+	int samples_per_epoch;
+	int epoch_length;
 
     int gpu_index;
     tree *hierarchy;
@@ -520,6 +522,12 @@ typedef enum {
     CLASSIFICATION_DATA, DETECTION_DATA, CAPTCHA_DATA, REGION_DATA, IMAGE_DATA, COMPARE_DATA, WRITING_DATA, SWAG_DATA, TAG_DATA, OLD_CLASSIFICATION_DATA, STUDY_DATA, DET_DATA, SUPER_DATA, LETTERBOX_DATA, REGRESSION_DATA, SEGMENTATION_DATA, INSTANCE_DATA
 } data_type;
 
+typedef struct {
+	int * epoch_counter;
+	int   imgs_per_epoch;
+	int   epoch_length;
+} load_epoch;
+
 typedef struct load_args{
     int threads;
     char **paths;
@@ -552,6 +560,7 @@ typedef struct load_args{
     image *resized;
     data_type type;
     tree *hierarchy;
+	load_epoch epoch_spec;
 } load_args;
 
 typedef struct{
@@ -701,6 +710,7 @@ float box_iou(box a, box b);
 void do_nms(box *boxes, float **probs, int total, int classes, float thresh);
 data load_all_cifar10();
 box_label *read_boxes(char *filename, int *n);
+box_label *read_boxes_no_fail(char *filename, int *n);
 box float_to_box(float *f, int stride);
 void draw_detections(image im, int num, float thresh, box *boxes, float **probs, float **masks, char **names, image **alphabet, int classes);
 

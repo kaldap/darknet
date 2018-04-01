@@ -1,8 +1,7 @@
-classes= 80
-train  = /home/pjreddie/data/coco/trainvalno5k.txt
-#valid  = coco_testdev
-valid = data/coco_val_5k.list
-names = data/coco.names
-backup = /home/pjreddie/backup/
+classes=80
+train=D:\!Datasets\COCO\coco\trainvalno5k-orig.txt
+valid=D:\!Datasets\COCO\coco\5k-orig.txt
+names=data\coco.names
+backup=D:\!Datasets\COCO\coco\orig\backup
 eval=coco
 

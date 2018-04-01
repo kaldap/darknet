@@ -54,19 +54,23 @@ char **get_random_paths(char **paths, int n, int m)
     return random_paths;
 }
 
-volatile int _last_loaded_image = 0;
-char **get_sequential_paths(char **paths, int n, int m)
+volatile int seq_epoch_counter = 0;
+FILE * testf = NULL;
+static char **get_sequential_paths(char **paths, int n, int m, load_epoch * epoch)
 {
 	char **selected_paths = calloc(n, sizeof(char*));
 	int i;
 
 	assert(m > 0);
 	pthread_mutex_lock(&mutex);
+	int offset = (*epoch->epoch_counter) * epoch->imgs_per_epoch;
 	for (i = 0; i < n; ++i) {
-		selected_paths[i] = paths[_last_loaded_image++];
-		if (_last_loaded_image >= m) {
-			//fprintf(stderr, "\r\n\r\nAll images has been processed!\r\n\r\n");
-			_last_loaded_image = 0;
+		selected_paths[i] = paths[(offset + (seq_epoch_counter % epoch->imgs_per_epoch)) % m];
+		seq_epoch_counter++;
+		if (seq_epoch_counter >= epoch->epoch_length) {
+			// Next epoch
+			*epoch->epoch_counter = *epoch->epoch_counter + 1;
+			seq_epoch_counter = 0;
 		}
 	}
 	pthread_mutex_unlock(&mutex);
@@ -155,34 +159,49 @@ matrix load_image_augment_paths(char **paths, int n, int min, int max, int size,
 }
 
 
+static box_label *read_boxes_fail(char *filename, int *n, int fail)
+{
+	FILE *file = fopen(filename, "r");
+	if (!file) {
+		if (fail)
+			file_error(filename);
+		fprintf(stderr, "Couldn't open file: %s! Skipping...\n", filename);
+		return NULL;
+	}
+	float x, y, h, w;
+	int id;
+	int count = 0;
+	int size = 64;
+	box_label *boxes = calloc(size, sizeof(box_label));
+	while (fscanf(file, "%d %f %f %f %f", &id, &x, &y, &w, &h) == 5) {
+		if (count == size) {
+			size = size * 2;
+			boxes = realloc(boxes, size*sizeof(box_label));
+		}
+		boxes[count].id = id;
+		boxes[count].x = x;
+		boxes[count].y = y;
+		boxes[count].h = h;
+		boxes[count].w = w;
+		boxes[count].left = x - w / 2;
+		boxes[count].right = x + w / 2;
+		boxes[count].top = y - h / 2;
+		boxes[count].bottom = y + h / 2;
+		++count;
+	}
+	fclose(file);
+	*n = count;
+	return boxes;
+}
+
 box_label *read_boxes(char *filename, int *n)
 {
-    FILE *file = fopen(filename, "r");
-    if(!file) file_error(filename);
-    float x, y, h, w;
-    int id;
-    int count = 0;
-    int size = 64;
-    box_label *boxes = calloc(size, sizeof(box_label));
-    while(fscanf(file, "%d %f %f %f %f", &id, &x, &y, &w, &h) == 5){
-        if(count == size) {
-            size = size * 2;
-            boxes = realloc(boxes, size*sizeof(box_label));
-        }
-        boxes[count].id = id;
-        boxes[count].x = x;
-        boxes[count].y = y;
-        boxes[count].h = h;
-        boxes[count].w = w;
-        boxes[count].left   = x - w/2;
-        boxes[count].right  = x + w/2;
-        boxes[count].top    = y - h/2;
-        boxes[count].bottom = y + h/2;
-        ++count;
-    }
-    fclose(file);
-    *n = count;
-    return boxes;
+	return read_boxes_fail(filename, n, 1);
+}
+
+box_label *read_boxes_no_fail(char *filename, int *n)
+{
+	return read_boxes_fail(filename, n, 0);
 }
 
 void randomize_boxes(box_label *b, int n)
@@ -961,9 +980,9 @@ data load_data_swag(char **paths, int n, int classes, float jitter)
     return d;
 }
 
-data load_data_detection(int n, char **paths, int m, int w, int h, int gray, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
+data load_data_detection(int n, char **paths, int m, int w, int h, int gray, int boxes, int classes, float jitter, float hue, float saturation, float exposure, load_epoch * epoch)
 {
-    char **random_paths = get_sequential_paths(paths, n, m);
+    char **random_paths = get_sequential_paths(paths, n, m, epoch);
     int i;
     data d = {0};
     d.shallow = 0;
@@ -1049,7 +1068,7 @@ void *load_thread(void *ptr)
     } else if (a.type == REGION_DATA){
         *a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
     } else if (a.type == DETECTION_DATA){
-        *a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.gray, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+        *a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.gray, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure, &a.epoch_spec);
     } else if (a.type == SWAG_DATA){
         *a.d = load_data_swag(a.paths, a.n, a.classes, a.jitter);
     } else if (a.type == COMPARE_DATA){

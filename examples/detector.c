@@ -36,6 +36,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
 
     layer l = net->layers[net->n - 1];
 
+	int epoch = 0;
     int classes = l.classes;
     float jitter = l.jitter;
 
@@ -43,6 +44,9 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     //int N = plist->size;
 	char * tmp_path;
     char **paths = (char **)list_to_array(plist);
+
+	if (!net->samples_per_epoch) net->samples_per_epoch = plist->size;
+	if (!net->epoch_length) net->epoch_length = plist->size;
 
     load_args args = get_base_args(net);
     args.coords = l.coords;
@@ -57,6 +61,10 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     //args.type = INSTANCE_DATA;
     args.threads = 32;
 	args.gray = (net->c == 1);
+	args.epoch_spec.epoch_counter = &epoch;
+	args.epoch_spec.epoch_length = net->epoch_length;
+	args.epoch_spec.imgs_per_epoch = net->samples_per_epoch;
+	fprintf(stderr, "Training %d samples per epoch with epoch length of %d...\r\n", net->samples_per_epoch, net->epoch_length);
 	assert(net->c == 1 || net->c == 3);
 
 	// Randomize order of paths
@@ -77,9 +85,11 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     while(get_current_batch(net) < net->max_batches){
         if(l.random && count++%10 == 0){
             printf("Resizing ");
-			int dimw = (origw / 2) + 10 * (rand() % (origw / 10));
+			int dimw = (origw / 2) + 20 * (rand() % (origw / 40) + 2);
+			if (dimw < (2 * origw / 3)) dimw = 2 * origw / 3;
+			
 			int dimh = (int)(dimw / ratio);
-			if (get_current_batch(net) + 20000 > net->max_batches) {
+			if ((get_current_batch(net) + 25000 > net->max_batches) || (dimw > origw)) {
 				dimw = origw;
 				dimh = origh;
 			}
@@ -144,7 +154,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
         avg_loss = avg_loss*.9 + loss*.1;
 		
         i = get_current_batch(net);
-        printf("%ld: %f, %f avg, %f rate, %lf seconds, %d images\n", get_current_batch(net), loss, avg_loss, get_current_rate(net), what_time_is_it_now()-time, i*imgs);
+        printf("%ld (epoch %ld): %f, %f avg, %f rate, %lf seconds, %d images\n", get_current_batch(net), epoch, loss, avg_loss, get_current_rate(net), what_time_is_it_now()-time, i*imgs);
         if((i - ia) > 100){
 			ia = i;
 #ifdef GPU
@@ -509,14 +519,17 @@ void validate_detector(char *datacfg, char *cfgfile, char *weightfile, char *out
     fprintf(stderr, "Total Detection Time: %f Seconds\n", what_time_is_it_now() - start);
 }
 
-void validate_detector_recall(char *cfgfile, char *weightfile)
+void validate_detector_recall(char *datacfg, char *cfgfile, char *weightfile)
 {
+	list *options = read_data_cfg(datacfg);
+	char *valid_images = option_find_str(options, "valid", "data/coco_val_5k.list");
+
     network *net = load_network(cfgfile, weightfile, 0);
     set_batch_network(net, 1);
     fprintf(stderr, "Learning Rate: %g, Momentum: %g, Decay: %g\n", net->learning_rate, net->momentum, net->decay);
     srand(time(0));
 
-    list *plist = get_paths("data/coco_val_5k.list");
+    list *plist = get_paths(valid_images);
     char **paths = (char **)list_to_array(plist);
 
     layer l = net->layers[net->n-1];
@@ -552,10 +565,14 @@ void validate_detector_recall(char *cfgfile, char *weightfile)
         find_replace(path, "images", "labels", labelpath);
         find_replace(labelpath, "JPEGImages", "labels", labelpath);
         find_replace(labelpath, ".jpg", ".txt", labelpath);
+		find_replace(labelpath, ".png", ".txt", labelpath);
         find_replace(labelpath, ".JPEG", ".txt", labelpath);
+		find_replace(labelpath, ".PNG", ".txt", labelpath);
 
         int num_labels = 0;
-        box_label *truth = read_boxes(labelpath, &num_labels);
+        box_label *truth = read_boxes_no_fail(labelpath, &num_labels);
+		if (truth == NULL) continue;
+
         for(k = 0; k < l.w*l.h*l.n; ++k){
             if(probs[k][0] > thresh){
                 ++proposals;
@@ -708,7 +725,7 @@ void run_detector(int argc, char **argv)
     else if(0==strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear);
     else if(0==strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
     else if(0==strcmp(argv[2], "valid2")) validate_detector_flip(datacfg, cfg, weights, outfile);
-    else if(0==strcmp(argv[2], "recall")) validate_detector_recall(cfg, weights);
+    else if(0==strcmp(argv[2], "recall")) validate_detector_recall(datacfg, cfg, weights);
     else if(0==strcmp(argv[2], "demo")) {
         list *options = read_data_cfg(datacfg);
         int classes = option_find_int(options, "classes", 20);
