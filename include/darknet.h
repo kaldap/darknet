@@ -9,7 +9,7 @@
 extern int gpu_index;
 
 #ifdef GPU
-    #define BLOCK 512
+    #define BLOCK 1024
 
     #include "cuda_runtime.h"
     #include "curand.h"
@@ -401,8 +401,10 @@ struct layer{
     cudnnFilterDescriptor_t dweightDesc;
     cudnnConvolutionDescriptor_t convDesc;
     cudnnConvolutionFwdAlgo_t fw_algo;
+#ifndef FORWARD_ONLY
     cudnnConvolutionBwdDataAlgo_t bd_algo;
     cudnnConvolutionBwdFilterAlgo_t bf_algo;
+#endif
 #endif
 #endif
 };

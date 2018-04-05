@@ -84,7 +84,7 @@ image get_convolutional_delta(convolutional_layer l)
 }
 
 static size_t get_workspace_size(layer l){
-#ifdef CUDNN
+#if defined(CUDNN)
     if(gpu_index >= 0){
         size_t most = 0;
         size_t s = 0;
@@ -95,6 +95,10 @@ static size_t get_workspace_size(layer l){
                 l.dstTensorDesc,
                 l.fw_algo,
                 &s);
+#if defined(FORWARD_ONLY)
+        (void)most;
+        return s;
+#else
         if (s > most) most = s;
         cudnnGetConvolutionBackwardFilterWorkspaceSize(cudnn_handle(),
                 l.srcTensorDesc,
@@ -112,6 +116,7 @@ static size_t get_workspace_size(layer l){
                 l.bd_algo,
                 &s);
         if (s > most) most = s;
+#endif
         return most;
     }
 #endif
@@ -129,8 +134,8 @@ void cudnn_convolutional_setup(layer *l)
     cudnnSetTensor4dDescriptor(l->dstTensorDesc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, l->batch, l->out_c, l->out_h, l->out_w); 
     cudnnSetTensor4dDescriptor(l->normTensorDesc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, 1, l->out_c, 1, 1); 
 
-    cudnnSetFilter4dDescriptor(l->dweightDesc, CUDNN_DATA_FLOAT, CUDNN_TENSOR_NCHW, l->n, l->c/l->groups, l->size, l->size); 
-    cudnnSetFilter4dDescriptor(l->weightDesc, CUDNN_DATA_FLOAT, CUDNN_TENSOR_NCHW, l->n, l->c/l->groups, l->size, l->size); 
+    cudnnSetFilter4dDescriptor(l->dweightDesc, CUDNN_DATA_FLOAT, l->n, l->c/l->groups, l->size, l->size); 
+    cudnnSetFilter4dDescriptor(l->weightDesc, CUDNN_DATA_FLOAT, l->n, l->c/l->groups, l->size, l->size); 
     #if CUDNN_MAJOR >= 6
     cudnnSetConvolution2dDescriptor(l->convDesc, l->pad, l->pad, l->stride, l->stride, 1, 1, CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT);
     #else
@@ -151,15 +156,16 @@ void cudnn_convolutional_setup(layer *l)
             l->convDesc,
             l->dstTensorDesc,
             CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
-            4000000000,
+            4000000000UL,
             &l->fw_algo);
+#ifndef FORWARD_ONLY
     cudnnGetConvolutionBackwardDataAlgorithm(cudnn_handle(),
             l->weightDesc,
             l->ddstTensorDesc,
             l->convDesc,
             l->dsrcTensorDesc,
             CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
-            4000000000,
+            4000000000UL,
             &l->bd_algo);
     cudnnGetConvolutionBackwardFilterAlgorithm(cudnn_handle(),
             l->srcTensorDesc,
@@ -167,8 +173,9 @@ void cudnn_convolutional_setup(layer *l)
             l->convDesc,
             l->dweightDesc,
             CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
-            4000000000,
+            4000000000UL,
             &l->bf_algo);
+#endif
 }
 #endif
 #endif

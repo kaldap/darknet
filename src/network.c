@@ -710,13 +710,20 @@ float *network_output(network *net)
 
 #ifdef GPU
 
+#ifdef BENCHMARK
+#define TT(x) { double time=what_time_is_it_now();x; printf("%s took %f sec...\n", #x, what_time_is_it_now()-time);}
+#else
+#define TT(x) x
+#endif
+
 void forward_network_gpu(network *netp)
 {
+double time;
     network net = *netp;
-    cuda_set_device(net.gpu_index);
-    cuda_push_array(net.input_gpu, net.input, net.inputs*net.batch);
+    TT(cuda_set_device(net.gpu_index));
+    TT(cuda_push_array(net.input_gpu, net.input, net.inputs*net.batch));
     if(net.truth){
-        cuda_push_array(net.truth_gpu, net.truth, net.truths*net.batch);
+        TT(cuda_push_array(net.truth_gpu, net.truth, net.truths*net.batch));
     }
 
     int i;
@@ -724,9 +731,9 @@ void forward_network_gpu(network *netp)
         net.index = i;
         layer l = net.layers[i];
         if(l.delta_gpu){
-            fill_gpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
+            TT(fill_gpu(l.outputs * l.batch, 0, l.delta_gpu, 1));
         }
-        l.forward_gpu(l, net);
+        TT(l.forward_gpu(l, net));
         net.input_gpu = l.output_gpu;
         net.input = l.output;
         if(l.truth) {
@@ -734,8 +741,8 @@ void forward_network_gpu(network *netp)
             net.truth = l.output;
         }
     }
-    pull_network_output(netp);
-    calc_network_cost(netp);
+    TT(pull_network_output(netp));
+    TT(calc_network_cost(netp));
 }
 
 void backward_network_gpu(network *netp)

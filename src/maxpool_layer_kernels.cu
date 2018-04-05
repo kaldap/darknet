@@ -94,6 +94,7 @@ extern "C" void forward_maxpool_layer_gpu(maxpool_layer layer, network net)
 
     forward_maxpool_layer_kernel<<<cuda_gridsize(n), BLOCK>>>(n, layer.h, layer.w, layer.c, layer.stride, layer.size, layer.pad, net.input_gpu, layer.output_gpu, layer.indexes_gpu);
     check_error(cudaPeekAtLastError());
+    cudaThreadSynchronize();
 }
 
 extern "C" void backward_maxpool_layer_gpu(maxpool_layer layer, network net)

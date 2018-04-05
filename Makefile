@@ -1,17 +1,10 @@
-GPU=0
-CUDNN=0
-OPENCV=0
-OPENMP=0
+GPU=1
+CUDNN=1
 DEBUG=0
+CUDNN_FWDONLY=1
 
-ARCH= -gencode arch=compute_30,code=sm_30 \
-      -gencode arch=compute_35,code=sm_35 \
-      -gencode arch=compute_50,code=[sm_50,compute_50] \
-      -gencode arch=compute_52,code=[sm_52,compute_52]
-#      -gencode arch=compute_20,code=[sm_20,sm_21] \ This one is deprecated?
-
-# This is what I use, uncomment if you know your arch and want to specify
-# ARCH= -gencode arch=compute_52,code=compute_52
+# https://github.com/tpruvot/ccminer/wiki/Compatibility
+ARCH= -gencode=arch=compute_30,code=\"sm_32,compute_30\" --verbose --target-cpu-architecture ARM -m32
 
 VPATH=./src/:./examples
 SLIB=libdarknet.so
@@ -19,18 +12,14 @@ ALIB=libdarknet.a
 EXEC=darknet
 OBJDIR=./obj/
 
-CC=gcc
-NVCC=nvcc 
-AR=ar
+CC=/usr/bin/arm-linux-gnueabihf-gcc-4.8 -march=armv7-a -mthumb -mfpu=neon  -mfloat-abi=hard 
+NVCC=/usr/local/cuda-6.5/bin/nvcc -ccbin="/usr/bin/arm-linux-gnueabihf-g++-4.8" --compiler-options="-march=armv7-a -mthumb -mfpu=neon  -mfloat-abi=hard"
+AR=/usr/bin/arm-linux-gnueabihf-gcc-ar-4.8
 ARFLAGS=rcs
-OPTS=-Ofast
-LDFLAGS= -lm -pthread 
-COMMON= -Iinclude/ -Isrc/
-CFLAGS=-Wall -Wno-unknown-pragmas -Wfatal-errors -fPIC
-
-ifeq ($(OPENMP), 1) 
-CFLAGS+= -fopenmp
-endif
+OPTS=-O3
+LDFLAGS= -lm -lpthread -lrt -ldl
+COMMON= -Iinclude/ -Isrc/ -I3rdparty/include/cudnn
+CFLAGS=-Wall -Wno-unknown-pragmas -Wno-unused-result -Wfatal-errors -fPIC
 
 ifeq ($(DEBUG), 1) 
 OPTS=-O0 -g
@@ -38,23 +27,21 @@ endif
 
 CFLAGS+=$(OPTS)
 
-ifeq ($(OPENCV), 1) 
-COMMON+= -DOPENCV
-CFLAGS+= -DOPENCV
-LDFLAGS+= `pkg-config --libs opencv` 
-COMMON+= `pkg-config --cflags opencv` 
-endif
-
 ifeq ($(GPU), 1) 
-COMMON+= -DGPU -I/usr/local/cuda/include/
+COMMON+= -DGPU -I3rdparty/include/cuda
 CFLAGS+= -DGPU
-LDFLAGS+= -L/usr/local/cuda/lib64 -lcuda -lcudart -lcublas -lcurand
+LDFLAGS+= -L3rdparty/lib/armhf -lcuda -l:libcudart_static.a -lcublas -lcurand -ldl
 endif
 
 ifeq ($(CUDNN), 1) 
 COMMON+= -DCUDNN 
 CFLAGS+= -DCUDNN
-LDFLAGS+= -lcudnn
+LDFLAGS+= -l:3rdparty/lib/armhf/libcudnn_static.a -l:libculibos.a
+endif
+
+ifeq ($(CUDNN_FWDONLY), 1) 
+COMMON+= -DFORWARD_ONLY
+CFLAGS+= -DFORWARD_ONLY
 endif
 
 OBJ=gemm.o utils.o cuda.o deconvolutional_layer.o convolutional_layer.o list.o image.o activations.o im2col.o col2im.o blas.o crop_layer.o dropout_layer.o maxpool_layer.o softmax_layer.o data.o matrix.o network.o connected_layer.o cost_layer.o parser.o option_list.o detection_layer.o route_layer.o box.o normalization_layer.o avgpool_layer.o layer.o local_layer.o shortcut_layer.o activation_layer.o rnn_layer.o gru_layer.o crnn_layer.o demo.o batchnorm_layer.o region_layer.o reorg_layer.o tree.o  lstm_layer.o

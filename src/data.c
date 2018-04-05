@@ -555,7 +555,7 @@ matrix load_regression_labels_paths(char **paths, int n)
         find_replace(labelpath, ".png", ".txt", labelpath);
 
         FILE *file = fopen(labelpath, "r");
-        fscanf(file, "%f", &(y.vals[i][0]));
+        (void)fscanf(file, "%f", &(y.vals[i][0]));
         fclose(file);
     }
     return y;
@@ -1338,7 +1338,7 @@ data load_cifar10_data(char *filename)
     if(!fp) file_error(filename);
     for(i = 0; i < 10000; ++i){
         unsigned char bytes[3073];
-        fread(bytes, 1, 3073, fp);
+        (void)fread(bytes, 1, 3073, fp);
         int class = bytes[0];
         y.vals[i][class] = 1;
         for(j = 0; j < X.cols; ++j){
@@ -1401,7 +1401,7 @@ data load_all_cifar10()
         if(!fp) file_error(buff);
         for(i = 0; i < 10000; ++i){
             unsigned char bytes[3073];
-            fread(bytes, 1, 3073, fp);
+            (void)fread(bytes, 1, 3073, fp);
             int class = bytes[0];
             y.vals[i+b*10000][class] = 1;
             for(j = 0; j < X.cols; ++j){
